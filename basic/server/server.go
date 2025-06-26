@@ -1,44 +1,70 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 	"net"
-	"strconv"
+	"os"
 )
 
-var PORT = 8000
+var (
+	logger = log.New(os.Stdout, "", log.Ldate|log.Ltime)
+	logErr = log.New(os.Stdout, "Error: ", log.Ldate|log.Ltime)
+)
+
+const (
+	HOSTNAME  = "localhost"
+	PORT      = "8000"
+	NETWORK_T = "tcp4"
+)
+
+const (
+	MAX_REQ_SIZE = 100
+	MAX_RES_SIZE = 100
+)
+
+func exitIfErr(err error) {
+	if err != nil {
+		logErr.Println(err.Error())
+		os.Exit(1)
+	}
+}
 
 func main() {
-	listener, err := net.Listen("tcp", "127.0.0.0:"+strconv.Itoa(PORT))
-	if err != nil {
-		fmt.Println("net.Listen")
-		return
-	}
+	listener, err := net.Listen(NETWORK_T, HOSTNAME+":"+PORT)
+	exitIfErr(err)
 	defer listener.Close()
 
 	for {
-		fmt.Println("Waiting for connection")
+		logger.Println("Waiting for connection in", listener.Addr().String())
+
 		conn, err := listener.Accept()
-		fmt.Println("Connection Accepted: ", conn.LocalAddr().String())
-		if err != nil {
-			fmt.Println("listner.Accept")
-			return
-		}
+		exitIfErr(err)
 
 		handleConnection(conn)
 	}
 }
 
 func handleConnection(conn net.Conn) {
-	var req string
-	_, err := conn.Read([]byte(req))
-	if err != nil {
-		conn.Close()
-		fmt.Println("Closing connection: ", conn.LocalAddr().String())
-		return
-	}
+	defer conn.Close()
 
-	fmt.Println("Request recv: ", req)
-	conn.Close()
-	fmt.Println("Closing connection: ", conn.LocalAddr().String())
+	var (
+		b   bytes.Buffer
+		req = make([]byte, MAX_REQ_SIZE)
+		res = make([]byte, MAX_RES_SIZE)
+	)
+
+	_, err := conn.Read([]byte(req))
+	exitIfErr(err)
+
+	logger.Println("Request recv: ", string(req))
+
+	fmt.Fprintf(&b, "Hello")
+	res = b.Bytes()
+
+	_, err = conn.Write([]byte(res))
+	exitIfErr(err)
+
+	logger.Println("Closing connection: ", conn.LocalAddr().String())
 }
